@@ -6,44 +6,48 @@ use warnings;
 use Email::Send;
 use Email::Send::Gmail;
 use Email::Simple::Creator;
+use DB_File;
+use Crypt::Lite;
+use vars qw($VERSION);
+$VERSION = '0.2'; 
 
-use constant IP_ARCHIVE_FILE => '/path/to/your/ip/archive/file';
-use constant GMAIL_USER_ID   => 'source@gmail.com';
-use constant GMAIL_PASSWD    => 'XXXXXX';
-use constant DEST_EMAIL      => 'destination@gmail.com';
-use constant SUBJECT         => 'Your IP-address has changed';
+my $email_subject = 'Your IP-address has changed';
+my $config        = 'config.db';
+my $old_ip        = 'ip.db';
+my $new_ip        = `curl -s http://checkip.dyndns.org`;
 
-my $ip_archive = IP_ARCHIVE_FILE;
-my $ip         = `curl -s http://checkip.dyndns.org`;
-$ip =~ s/.*?(\d+\.\d+\.\d+\.\d+).*/$1/s;
+$new_ip =~ s/.*?(\d+\.\d+\.\d+\.\d+).*/$1/s;
 
-open( IP, "<", $ip_archive ) or die "Cannot open $ip_archive: $!";
-my $ip_last_check = <IP>;
-close IP;
+die "You should run configure.pl first\n" unless -e -r $config;
 
-if ( $ip ne $ip_last_check ) {
-	open( IP, ">", $ip_archive ) or die "Cannot open $ip_archive: $!";
-	print IP $ip;
-	close(IP);
+tie( my %old_ip, 'DB_File', $old_ip );
+$old_ip = $old_ip{address} || "";
+$old_ip{address} = $new_ip;
+untie %old_ip;
+
+if ( $new_ip ne $old_ip ) {
+	tie( my %config, 'DB_File', $config ) or die "Can't open DB_File $config : $!\n";
+	my $crypt = Crypt::Lite->new( debug => 0, encoding => 'hex8' );
 
 	my $email = Email::Simple->create(
 		header => [
-			From    => GMAIL_USER_ID,
-			To      => DEST_EMAIL,
-			Subject => SUBJECT,
+			From    => $crypt->decrypt( $config{username},    $config ),
+			To      => $crypt->decrypt( $config{destination}, $config ),
+			Subject => $email_subject,
 		],
-		body => "Your IP-address has changed to $ip",
+		body => "Your IP-address has changed to $new_ip",
 	);
 
 	my $sender = Email::Send->new(
 		{
 			mailer      => 'Gmail',
 			mailer_args => [
-				username => GMAIL_USER_ID,
-				password => GMAIL_PASSWD,
+				username => $crypt->decrypt( $config{username}, $config ),
+				password => $crypt->decrypt( $config{password}, $config ),
 			]
 		}
 	);
+	untie %config;
 	eval { $sender->send($email) };
 	die "Error sending email: $@" if $@;
 }

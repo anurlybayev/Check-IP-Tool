@@ -1,16 +1,18 @@
-I needed a script that would check my ISP IP and if it has changed send me an e-mail.
+I needed a script that would check my Dynamic ISP IP and if it has changed send me an e-mail.
 
 The original idea was taken from:
 http://www.macosxhints.com/article.php?story=2004102508055243
 
 The service I am using to check my IP: http://checkip.dyndns.org
-The modules I am using to send email:
+
+Dependencies:
 Email::Send
 Email::Send::Gmail
 Email::Simple::Creator
+Crypt::Lite;
 
-These are possible dependencies but try running script without them
-sudo apt-get install libcrypt-ssleay-perl
-sudo apt-get install libio-socket-ssl-perl
-sudo apt-get install libauthen-sasl-perl
-sudo apt-get install libnet-smtp-ssl-perl
+Release notes:
+Version 0.2
+Added simple encryption so that the passwords you provide are not in plain text.
+You have to run configure.pl once and then you can set your cron to run check_ip.pl.
+Scripts must have permission to write to local dir.
